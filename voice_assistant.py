@@ -1,17 +1,17 @@
 import os
+import re
 from dotenv import load_dotenv  # type: ignore
 from elevenlabs.client import ElevenLabs  # type: ignore
 from elevenlabs.conversational_ai.conversation import Conversation  # type: ignore
 from elevenlabs.conversational_ai.default_audio_interface import DefaultAudioInterface  # type: ignore
 from elevenlabs.types import ConversationConfig  # type: ignore
 
-print("Current working directory:", os.getcwd())  # Prints current folder your script runs from
+print("Current working directory:", os.getcwd())
 print("Files in directory:", os.listdir())
 
 # Load environment variables
 load_dotenv("credentials.env")  # specify your env file if not '.env'
 
-# Get variables by their names in the env file
 API_KEY = os.getenv("API_KEY")
 AGENT_ID = os.getenv("AGENT_ID")
 
@@ -21,11 +21,43 @@ print("API_KEY:", API_KEY)
 if not API_KEY or not AGENT_ID:
     raise ValueError("Missing API_KEY or AGENT_ID from .env file")
 
-# Rest of your code remains unchanged...
-
 user_name = "Marylyne"
-schedule = "your boyfriend's birthday is on the 10th of this july, and you have a meeting with your boss on the 20th at 10 AM. You also have a dentist appointment on the 25th at 3 PM."
-prompt = f"You are a helpful assistant. Your interlocutor has the following schedule: {schedule}."
+
+# Initial schedule as a dictionary for easier updates
+schedule_data = {
+    "Monday": [
+        {"time": "9:00 AM - 10:00 AM", "event": "Team meeting"},
+        {"time": "10:30 AM - 11:30 AM", "event": "Project discussion"},
+        {"time": "1:00 PM - 2:00 PM", "event": "Client call"},
+    ],
+    "Tuesday": [
+        {"time": "9:00 AM - 10:00 AM", "event": "Team meeting"},
+        {"time": "10:30 AM - 11:30 AM", "event": "Project discussion"},
+        {"time": "1:00 PM - 2:00 PM", "event": "Client call"},
+    ],
+    "Wednesday": [
+        {"time": "9:00 AM - 10:00 AM", "event": "Team meeting"},
+        {"time": "10:30 AM - 11:30 AM", "event": "Project discussion"},
+        {"time": "1:00 PM - 2:00 PM", "event": "Client call"},
+    ],
+    "Thursday": [
+        {"time": "9:00 AM - 10:00 AM", "event": "Team meeting"},
+        {"time": "10:30 AM - 11:30 AM", "event": "Project discussion"},
+        {"time": "1:00 PM - 2:00 PM", "event": "Client call"},
+    ],
+}
+
+def schedule_to_string():
+    """Convert schedule_data dict to a string representation for prompt."""
+    output = []
+    for day, events in schedule_data.items():
+        event_strings = [f"{e['time']}: {e['event']}" for e in events]
+        output.append(f"{day}: " + ", ".join(event_strings))
+    return "\n".join(output)
+
+schedule_str = schedule_to_string()
+
+prompt = f"You are a helpful assistant. Your interlocutor {user_name} has the following schedule:\n{schedule_str}"
 first_message = f"Hello {user_name}, how can I help you today?"
 
 conversation_override = {
@@ -51,6 +83,33 @@ def print_interrupted_response(original, corrected):
 
 def print_user_transcript(transcript):
     print(f"User: {transcript}")
+    # Detect if user wants to schedule a meeting
+    detected = detect_schedule_intent(transcript)
+    if detected:
+        day, time_range, description = detected
+        add_meeting(day, time_range, description)
+        # Have the assistant respond verbally
+        conversation.say_text(f"Got it! I've scheduled {description} on {day} at {time_range}.")
+
+def detect_schedule_intent(transcript):
+    """
+    Very basic regex to detect:
+    "Schedule a meeting on Friday at 4 PM for performance review"
+    """
+    pattern = r"schedule .* on (\w+) at ([\d:APMapm ]+) for (.+)"
+    match = re.search(pattern, transcript, re.IGNORECASE)
+    if match:
+        day = match.group(1).capitalize()
+        time_range = match.group(2).strip()
+        description = match.group(3).strip()
+        return day, time_range, description
+    return None
+
+def add_meeting(day, time_range, description):
+    if day not in schedule_data:
+        schedule_data[day] = []
+    schedule_data[day].append({"time": time_range, "event": description})
+    print(f"📅 Added meeting: '{description}' on {day} at {time_range}")
 
 conversation = Conversation(
     client,
